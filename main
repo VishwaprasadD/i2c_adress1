@@ -1,0 +1,98 @@
+`timescale 1ns / 1ps
+
+module i2c_address_translator(
+  input wire clk,      
+  input wire rst,        
+  input wire [6:0] master_addr, 
+  input wire master_rw,      
+  input wire [7:0] master_data,  
+  output reg [7:0] slave_data,  
+  output reg ack         
+);
+  parameter device1_addr = 7'h48;
+  parameter device2_real_addr = 7'h48;  
+  parameter device2_proxy_addr = 7'h49; 
+  reg [7:0] device1_reg;
+  reg [7:0] device2_reg;
+  always @(posedge clk or posedge rst) begin
+    if (rst) begin
+      device1_reg <= 8'h00;
+      device2_reg <= 8'h00;
+      slave_data <= 8'h00;
+      ack <= 0;
+    end else begin
+      if (master_rw) begin
+        if (master_addr == device1_addr)
+          slave_data <= device1_reg;
+        else if (master_addr == device2_proxy_addr)
+          slave_data <= device2_reg;
+        else
+          slave_data <= 8'h00; 
+      end
+      if (!master_rw) begin
+        if (master_addr == device1_addr)
+          device1_reg <= master_data;
+        else if (master_addr == device2_proxy_addr)
+          device2_reg <= master_data;
+      end
+      ack <= 1;
+    end
+  end
+endmodule
+
+
+#testbench
+`timescale 1ns / 1ps
+
+module tb_i2c_translator;
+
+    reg clk;
+    reg rst;
+    reg [6:0] master_addr;
+    reg master_rw;
+    reg [7:0] master_data;
+    wire [7:0] slave_data;
+    wire ack;
+
+    
+    i2c_address_translator uut (
+        .clk(clk),
+        .rst(rst),
+        .master_addr(master_addr),
+        .master_rw(master_rw),
+        .master_data(master_data),
+        .slave_data(slave_data),
+        .ack(ack)
+    );
+
+    initial clk = 0;
+    always #5 clk = ~clk;
+
+    initial begin
+        rst = 1;
+        #10;
+        rst = 0;
+
+        master_addr = 7'h48;
+        master_rw = 0; 
+        master_data = 8'hAA;
+        #10;
+
+        master_addr = 7'h49;
+        master_rw = 0; 
+        master_data = 8'h55;
+        #10;
+
+        master_addr = 7'h48;
+        master_rw = 1; 
+        #10;
+        $display("Read from Device 1: %h", slave_data);
+        master_addr = 7'h49;
+        master_rw = 1; 
+        #10;
+        $display("Read from Device 2: %h", slave_data);
+       $finish;
+    end
+endmodule
+
+
